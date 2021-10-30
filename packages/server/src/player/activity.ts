@@ -1,33 +1,38 @@
-import { IsArray, IsBoolean, IsEnum, IsIn, IsNumber, IsOptional, IsUUID } from "class-validator";
-import { ErrorResponse, Validatable } from "er-expresskit";
+import { ArrayMinSize, IsArray, IsBoolean, IsEnum, IsIn, IsNumber, IsObject, IsOptional, IsUUID, Max, Min, ValidateNested } from "class-validator";
+import { ErrorResponse, Validatable, assertValid } from "er-expresskit";
+import { Color, EffectColor } from "phea.js";
+import { AnyActivity, ActivityType, SpotifySyncActivity, SpotifyShuffleActivity, SpotifyActivity, StaticActivity, Activity } from "@spotihue/shared";
 
-export enum ActivityType {
-    spotifySync = "spotifySync",
-    spotifyShuffle = "spotifyShuffle",
-    static = "static"
+class ColorSchema<ColorType extends Color = Color> extends Validatable<ColorType> {
+    @IsNumber()
+    @Min(0)
+    @Max(255)
+    red: number;
+
+    @IsNumber()
+    @Min(0)
+    @Max(255)
+    green: number;
+
+    @IsNumber()
+    @Min(0)
+    @Max(255)
+    blue: number;
 }
 
-export interface Activity<Type extends ActivityType> {
-    hueID: string;
-    type: Type;
+class EffectColorSchema extends ColorSchema<EffectColor> {
+    @IsNumber()
+    @IsOptional()
+    @Min(0)
+    @Max(255)
+    brightness: number;
+
+    @IsNumber()
+    @IsOptional()
+    @Min(0)
+    @Max(1)
+    alpha: number;
 }
-
-export interface SpotifyActivity<Type extends ActivityType> extends Activity<Type> {
-    subtle?: boolean;
-}
-
-export interface SpotifySyncActivity extends SpotifyActivity<ActivityType.spotifySync> {
-    spotifyID: string;
-}
-
-export type SpotifyShuffleActivity = SpotifyActivity<ActivityType.spotifyShuffle>;
-
-export interface StaticActivity extends Activity<ActivityType.static> {
-    colors: string[];
-    colorDuration: number;
-}
-
-export type AnyActivity = SpotifySyncActivity | SpotifyShuffleActivity | StaticActivity;
 
 class ActivitySchema<Type extends ActivityType, ActivityModel extends Activity<Type>> extends Validatable<ActivityModel> implements Activity<Type> {
     @IsUUID()
@@ -38,9 +43,18 @@ class ActivitySchema<Type extends ActivityType, ActivityModel extends Activity<T
 }
 
 class SpotifyActivitySchema<Type extends ActivityType, ActivityModel extends SpotifyActivity<Type>> extends ActivitySchema<Type, ActivityModel> implements SpotifyActivity<Type> {
+    constructor(props: ActivityModel) {
+        super(props);
+        if (this.dampenColor) this.dampenColor = new EffectColorSchema(this.dampenColor);
+    }
+
     @IsBoolean()
     @IsOptional()
-    subtle?: boolean;
+    dampen?: boolean;
+
+    @ValidateNested()
+    @IsOptional()
+    dampenColor?: EffectColorSchema;
 }
 
 class SpotifySyncActivitySchema extends SpotifyActivitySchema<ActivityType.spotifySync, SpotifySyncActivity> implements SpotifySyncActivity {
@@ -49,10 +63,21 @@ class SpotifySyncActivitySchema extends SpotifyActivitySchema<ActivityType.spoti
 }
 
 class StaticActivitySchema extends ActivitySchema<ActivityType.static, StaticActivity> implements StaticActivity {
+    constructor(props: StaticActivity) {
+        super(props);
+        if (props.colors) this.colors = props.colors.map(color => {
+            if (typeof color === "object" && color) return new ColorSchema(color);
+            else return color;
+        })
+    }
+
     @IsArray()
-    colors: string[];
+    @ArrayMinSize(2)
+    @ValidateNested()
+    colors: ColorSchema[];
 
     @IsNumber()
+    @Min(10)
     colorDuration: number;
 }
 
@@ -67,11 +92,11 @@ export function assertedActivity(activity: any): AnyActivity {
 
     switch (activity.type) {
         case ActivityType.spotifySync:
-            return new SpotifySyncActivitySchema(activity, ["hueID", "spotifyID", "subtle", "type"]).asserted;
+            return assertValid(SpotifySyncActivitySchema, activity);
         case ActivityType.spotifyShuffle:
-            return new SpotifyActivitySchema(activity, ["hueID", "subtle", "type"]).asserted as SpotifyShuffleActivity;
+            return assertValid(SpotifyActivitySchema, activity);
         case ActivityType.static:
-            return new StaticActivitySchema(activity, ["hueID", "colors", "colorDuration", "type"]).asserted;
+            return assertValid(StaticActivitySchema, activity);
         default:
             throw ErrorResponse.status(400).message("Invalid activity");
     }

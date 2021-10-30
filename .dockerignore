@@ -1,0 +1,18 @@
+# exclude dot-files (.env, .git, ...)
+.*
+!.pnp.js
+!.yarnrc.yml
+!.yarn/plugins
+!.yarn/releases
+
+# logs
+logs
+*.log
+
+# dependency directory & cache (eg. babel)
+node_modules
+
+# build directory
+packages/server/build
+packages/app/build
+packages/shared/build

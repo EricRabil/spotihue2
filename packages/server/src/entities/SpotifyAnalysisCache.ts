@@ -1,5 +1,6 @@
 import { SpotifyAnalysisResult, Cache } from "sactivity";
-import { BaseEntity, Column, Entity, PrimaryColumn } from "typeorm";
+import { AfterInsert, BaseEntity, Column, Entity, PrimaryColumn } from "typeorm";
+import { SpotifyShuffler } from "../player/shuffler";
 
 @Entity()
 export class SpotifyAnalysisCache extends BaseEntity {
@@ -8,6 +9,11 @@ export class SpotifyAnalysisCache extends BaseEntity {
 
     @Column("json")
     analysis: SpotifyAnalysisResult;
+
+    @AfterInsert()
+    handleInserted() {
+        SpotifyShuffler.addToQueue(this.id);
+    }
 
     static cache: Cache<SpotifyAnalysisResult> = {
         async resolve(ids: string[]): Promise<Record<string, SpotifyAnalysisResult>> {

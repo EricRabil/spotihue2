@@ -1,7 +1,7 @@
 import { HueStream } from "phea.js";
 import { Router } from "express";
-import { APIResponse, ErrorResponse, Validatable } from "er-expresskit";
-import { IsArray, IsIP } from "class-validator";
+import { APIResponse, assertValid, ErrorResponse, Validatable } from "er-expresskit";
+import { IsArray, IsIP, IsOptional, IsString, MaxLength } from "class-validator";
 import { HueBridge } from "../entities/HueBridge";
 import { assertUUID } from "../util/validation";
 
@@ -17,25 +17,24 @@ class PairingRequest extends Validatable<{ ip: string }> {
     @IsIP()
     ip: string;
 
-    static asserted(body: any) {
-        return new this(body, ["ip"]).asserted;
-    }
+    @IsOptional()
+    @IsString()
+    @MaxLength(32)
+    label: string;
 }
 
 HueRoutes.post("/discover/pair", async (req, res) => {
-    const { ip } = PairingRequest.asserted(req.body);
-
-    if ((await HueBridge.count({ ip })) > 0) throw ErrorResponse.status(409).message("A bridge with that IP already exists").error;
+    const { ip, label } = assertValid(PairingRequest, req.body);
 
     try {
         const { username, psk } = await HueStream.register(ip);
 
-        const { json: bridge } = await HueBridge.create({ ip, username, psk }).save();
+        const { json: bridge } = await HueBridge.create({ ip, label, username, psk }).save();
 
         APIResponse.json({ bridge }).send(res);
     } catch (e) {
         if (e instanceof Error && e.message) {
-            throw ErrorResponse.status(400).message(e.message).error;
+            throw ErrorResponse.status(400).message(e.message);
         }
 
         throw e;
@@ -51,7 +50,26 @@ HueRoutes.get("/bridges", async (req, res) => {
 HueRoutes.get("/bridges/:bridgeID", async (req, res) => {
     const bridge = await HueBridge.findOne({ uuid: assertUUID(req.params.bridgeID) });
 
-    if (!bridge) throw ErrorResponse.status(404).message("Bridge not found").error;
+    if (!bridge) throw ErrorResponse.status(404).message("Bridge not found");
+
+    APIResponse.json({ bridge: bridge.json }).send(res);
+});
+
+class HueEditRequest extends Validatable<{ label: string | undefined | null }> {
+    @IsOptional()
+    @IsString()
+    @MaxLength(32)
+    label: string | undefined | null;
+}
+
+HueRoutes.patch("/bridges/:bridgeID", async (req, res) => {
+    const { label } = assertValid(HueEditRequest, req.body);
+    const bridge = await HueBridge.findOne({ uuid: assertUUID(req.params.bridgeID) });
+
+    if (!bridge) throw ErrorResponse.status(404).message("Bridge not found");
+
+    bridge.label = label || null;
+    await bridge.save();
 
     APIResponse.json({ bridge: bridge.json }).send(res);
 });
@@ -59,7 +77,7 @@ HueRoutes.get("/bridges/:bridgeID", async (req, res) => {
 HueRoutes.get("/bridges/:bridgeID/lights", async (req, res) => {
     const bridge = await HueBridge.findOne({ uuid: assertUUID(req.params.bridgeID) });
 
-    if (!bridge) throw ErrorResponse.status(404).message("Bridge not found").error;
+    if (!bridge) throw ErrorResponse.status(404).message("Bridge not found");
 
     const lights = await HueStream.lights({
         host: bridge.ip,
@@ -78,9 +96,9 @@ class NewGroupRequest extends Validatable<{ lights: (string | number)[] }> {
 HueRoutes.post("/bridges/:bridgeID/group", async (req, res) => {
     const bridge = await HueBridge.findOne({ uuid: assertUUID(req.params.bridgeID) });
 
-    if (!bridge) throw ErrorResponse.status(404).message("Bridge not found").error;
+    if (!bridge) throw ErrorResponse.status(404).message("Bridge not found");
 
-    const { lights } = new NewGroupRequest(req.body, ["lights"]).asserted;
+    const { lights } = assertValid(NewGroupRequest, req.body);
 
     const group = await HueStream.createGroup({
         host: bridge.ip,
@@ -89,6 +107,17 @@ HueRoutes.post("/bridges/:bridgeID/group", async (req, res) => {
     }, lights);
 
     bridge.groupID = group;
+    await bridge.save();
+
+    APIResponse.json({ bridge: bridge.json }).send(res);
+});
+
+HueRoutes.put("/bridges/:bridgeID/group/:groupID", async (req, res) => {
+    const bridge = await HueBridge.findOne({ uuid: assertUUID(req.params.bridgeID) });
+
+    if (!bridge) throw ErrorResponse.status(404).message("Bridge not found");
+
+    bridge.groupID = req.params.groupID;
     await bridge.save();
 
     APIResponse.json({ bridge: bridge.json }).send(res);

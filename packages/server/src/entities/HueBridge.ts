@@ -1,23 +1,17 @@
-import { BaseEntity, Column, Entity, PrimaryGeneratedColumn } from "typeorm";
-
-export interface PublicHueBridge {
-    uuid: string;
-    groupID: string | null;
-    ip: string;
-}
-
-export interface DetailedHueBridge extends PublicHueBridge {
-    username: string;
-    psk: string;
-}
+import { AfterInsert, AfterUpdate, BaseEntity, Column, Entity, PrimaryGeneratedColumn } from "typeorm";
+import { EventBus } from "../stream";
+import { DetailedHueBridge, PublicHueBridge } from "@spotihue/shared";
 
 @Entity()
 export class HueBridge extends BaseEntity implements DetailedHueBridge {
     @PrimaryGeneratedColumn("uuid")
     uuid: string;
 
-    @Column({ unique: true })
+    @Column()
     ip: string;
+
+    @Column({ default: "Bridge" })
+    label: string;
 
     @Column()
     username: string;
@@ -28,11 +22,20 @@ export class HueBridge extends BaseEntity implements DetailedHueBridge {
     @Column("varchar", { nullable: true, default: null })
     groupID: string | null;
 
+    @AfterUpdate()
+    @AfterInsert()
+    async updated() {
+        const bridges = (await HueBridge.find()).map(bridge => bridge.json);
+
+        EventBus.emit("hubsChanged", bridges);
+    }
+
     get json(): PublicHueBridge {
         return {
             uuid: this.uuid,
             groupID: this.groupID,
-            ip: this.ip
+            ip: this.ip,
+            label: this.label
         }
     }
 

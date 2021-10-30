@@ -14,9 +14,9 @@ export const SpotifyConnectionManager = new class SpotifyConnectionManager {
         socket: CoordinatedSpotifySocket;
     }> = {};
 
-    #observers: Record<string, Array<Observer<SpotifySocket>>> = {};
+    #observers: Record<string, Array<Observer<CoordinatedSpotifySocket>>> = {};
     
-    resolveSpotify(id: string): SpotifySocket | null {
+    resolveSpotify(id: string): CoordinatedSpotifySocket | null {
         return this.#sockets[id]?.socket || null;
     }
 
@@ -25,7 +25,7 @@ export const SpotifyConnectionManager = new class SpotifyConnectionManager {
 
         const account = await SpotifyAccount.findOne({ uuid });
 
-        if (!account) throw ErrorResponse.status(404).message("Spotify account not found").error;
+        if (!account) throw ErrorResponse.status(404).message("Spotify account not found");
 
         log("Constructing SpotifySocket for UUID %s", uuid);
 

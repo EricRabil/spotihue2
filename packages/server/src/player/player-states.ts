@@ -13,5 +13,5 @@ interface PlayerStateEvents {
 }
 
 export const PlayerStates = new class PlayerStates extends (EventEmitter as new () => TypedEmitter<PlayerStateEvents>) {
-    readonly states: Record<string, ResolvedPlayerState> = observable((accountID, state) => this.emit("stateChanged", accountID, state));
+    readonly states: Record<string, ResolvedPlayerState | undefined> = observable((accountID, state) => this.emit("stateChanged", accountID, state!));
 }

@@ -10,6 +10,8 @@ export namespace TransitionGenerator {
     const MAX_BRI = 400;
     const RANGE = MAX_BRI - MIN_BRI;
 
+    const DEFAULT_DAMPEN_COLOR = EffectColor.make({ red: 50, green: 50, blue: 50, brightness: 50 });
+
     function normalizeBrightness(brightness: number): number {
         if (brightness <= 0) return 0;
         else if (brightness >= 255) return 255;
@@ -20,12 +22,50 @@ export namespace TransitionGenerator {
         return RANGE * (decibels - minDecibels) / (maxDecibels - minDecibels) + MIN_BRI;
     }
 
+    export function dampenedColor(color: EffectColor, dampenColor: EffectColor, factor: number = 4): EffectColor  {
+        return EffectColor.mix(color, dampenColor, 1 / factor, true);
+    }
+
+    export function dampenFrames(frames: TransitionFrame[], dampenColor: EffectColor = DEFAULT_DAMPEN_COLOR, factor?: number): TransitionFrame[] {
+        return frames.map(({ color, start }) => ({
+            color: dampenedColor(color, dampenColor, factor),
+            start
+        }));
+    }
+
+    function dampenMergeAlgorithm(frames: TransitionFrame[], factor: number): TransitionFrame[] {
+        const newFrames: TransitionFrame[] = [];
+
+        for (let i = 0; i < frames.length; i+= factor) {
+            const framesToMerge: TransitionFrame[] = newFrames.splice(i, factor);
+
+            if (framesToMerge.length === 0) continue;
+
+            let medianStartTime = 0;
+
+            if (framesToMerge.length % 2) {
+                // odd
+                medianStartTime = framesToMerge[Math.floor(framesToMerge.length / 2)].start;
+            } else {
+                // even
+                medianStartTime = (framesToMerge[Math.floor(framesToMerge.length / 2)].start + framesToMerge[Math.floor(framesToMerge.length / 2) - 1].start) / 2
+            }
+
+            newFrames.push({
+                color: Color.mergeEvenly(...framesToMerge.map(frame => frame.color)),
+                start: medianStartTime
+            });
+        }
+
+        return newFrames;
+    }
+
     /**
      * The start time of the song, used for determining keyframe points
      * @param result audio analysis result
      * @param startTime 
      */
-    export function generate({ segments, sections, tatums }: SpotifyAnalysisResult, startTime: number, colorDatabase: Color[], mostPrevelantPitchIndex = 0): TransitionFrame[] {
+    export function generateFrames({ segments, sections, tatums }: SpotifyAnalysisResult, startTime: number, colorDatabase: Color[], mostPrevelantPitchIndex = 0): TransitionFrame[] {
         const decibels = segments.map(segment => segment.loudness_max).sort((d1, d2) => d1 - d2);
 
         const colorSignedFrames = sections.flatMap(section => {
@@ -71,7 +111,7 @@ export namespace TransitionGenerator {
         const effects: TransitionFrame[][] = [];
 
         for (let i = 1; i <= numberOfSideEffects; i++) {
-            let effect = generate(result, startTime, colorDatabase, i);
+            let effect = generateFrames(result, startTime, colorDatabase, i);
             effect.forEach((frame, index) => {
                 frame.color = EffectColor.mix(frame.color, baseEffect[index].color, 0.9, true);
             });

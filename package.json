@@ -5,6 +5,13 @@
     "lerna": "^3.22.1",
     "typescript": "4.1.*"
   },
+  "scripts": {
+    "shared:build": "cd packages/shared && tsc -p .",
+    "server:build": "cd packages/server && tsc -p .",
+    "app:build": "cd packages/app && yarn build",
+    "build": "yarn shared:build && yarn server:build && yarn app:build",
+    "server:start": "cd packages/server && DEBUG='spotihue,spotihue:*' node dist/index.js"
+  },
   "workspaces": [
     "packages/*"
   ]

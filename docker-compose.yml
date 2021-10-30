@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+    spotihue:
+        build: .
+        restart: unless-stopped
+        environment:
+            - DB_DATABASE=spotihue
+            - DB_USERNAME=postgres
+            - DB_PASSWORD=postgres
+            - DB_HOST=127.0.0.1
+            - DB_SYNCHRONIZE=true
+            - DB_TYPE=postgres
+            - DB_PORT=6666
+        env_file:
+            - packages/server/.env
+        volumes:
+            - /spotihue/node_modules
+            - /spotihue/.yarn-cache
+        depends_on:
+            - db
+        network_mode: host
+    db:
+        image: postgres
+        network_mode: host
+        command: -p 6666
+        environment:
+            - POSTGRES_DB=spotihue
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=postgres

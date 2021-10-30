@@ -13,5 +13,5 @@ export interface ResolvedAnalysis {
 }
 
 export const TrackAnalyses = new class TrackAnalyses extends (EventEmitter as new () => TypedEmitter<TrackAnalysisEvents>) {
-    readonly analyses: Record<string, ResolvedAnalysis> = observable((accountID, analysis) => this.emit("analysisChanged", accountID, analysis));
+    readonly analyses: Record<string, ResolvedAnalysis | undefined> = observable((accountID, analysis) => this.emit("analysisChanged", accountID, analysis!));
 }

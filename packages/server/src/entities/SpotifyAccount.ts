@@ -1,4 +1,5 @@
-import { Entity, BaseEntity, PrimaryGeneratedColumn, Column } from "typeorm";
+import { Entity, BaseEntity, PrimaryGeneratedColumn, Column, AfterInsert, AfterUpdate, AfterRemove } from "typeorm";
+import { EventBus } from "../stream";
 
 export interface PublicSpotifyAccount {
     uuid: string;
@@ -20,6 +21,10 @@ export class SpotifyAccount extends BaseEntity {
     @Column()
     label: string;
 
+    static async emitUpdated() {
+        EventBus.emit("accountsChanged", await this.find());
+    }
+    
     get json(): PublicSpotifyAccount {
         return {
             uuid: this.uuid,

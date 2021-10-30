@@ -1,0 +1,52 @@
+#frame-sync {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 0;
+}
+
+.artwork-overlay {
+    width: 100vw;
+    height: 100vh;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    opacity: 0.6;
+}
+
+.blur {
+    width: 100vw;
+    height: 100vh;
+    position: absolute;
+    top: 0;
+    left: 0;
+    backdrop-filter: blur(10px);
+}
+
+#frame-sync ~ *:not(.artwork-overlay):not(.blur) {
+    z-index: 1;
+    width: 75vw;
+    max-width: 75vh;
+
+    & .MuiCard-root {
+        flex-flow: column-reverse;
+        background: rgba(0, 0, 0, 0.5);
+        color: white;
+        text-align: center;
+
+        & * {
+            color: white;
+        }
+
+        & .MuiCardMedia-root {
+            width: auto;
+            max-width: 75vh;
+            height: 75vh;
+        }
+    }
+}

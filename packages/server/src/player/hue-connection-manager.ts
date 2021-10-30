@@ -2,6 +2,7 @@ import { ErrorResponse } from "er-expresskit";
 import { HueStream } from "phea.js";
 import { HueBridge } from "../entities/HueBridge";
 import { log } from "../util/log";
+import { MockHueStream } from "../util/mock-hue-stream";
 
 export const HueConnectionManager = new class HueConnectionManager {
     #streams: Record<string, HueStream> = {};
@@ -20,7 +21,7 @@ export const HueConnectionManager = new class HueConnectionManager {
 
         log("Constructing a HueStream for UUID %s with group %s", uuid, bridgeProfile.groupID);
 
-        const stream = this.#streams[uuid] = await HueStream.make({
+        const stream = this.#streams[uuid] = await (process.env.MOCK_HUE_STREAM ? MockHueStream : HueStream).make({
             auth: {
                 host: bridgeProfile.ip,
                 username: bridgeProfile.username,

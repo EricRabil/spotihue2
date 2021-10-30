@@ -1,5 +1,5 @@
 import { IsString, MaxLength } from "class-validator";
-import { APIResponse, ErrorResponse, Validatable } from "er-expresskit";
+import { APIResponse, assertValid, ErrorResponse, Validatable } from "er-expresskit";
 import { Router } from "express";
 import { SpotifyAccount } from "../entities/SpotifyAccount";
 import { assertUUID } from "../util/validation";
@@ -16,9 +16,10 @@ class AccountCreationRequest extends Validatable<{ cookies: string; label: strin
 }
 
 SpotifyRoutes.post("/accounts", async (req, res) => {
-    const { cookies, label } = new AccountCreationRequest(req.body, ["cookies", "label"]).asserted;
+    const { cookies, label } = assertValid(AccountCreationRequest, req.body);
 
     const { json: account } = await SpotifyAccount.create({ cookies, label }).save();
+    await SpotifyAccount.emitUpdated();
 
     APIResponse.json({ account }).send(res);
 });
@@ -35,4 +36,15 @@ SpotifyRoutes.get("/accounts/:accountID", async (req, res) => {
     if (!account) throw ErrorResponse.status(404).message("Account not found");
 
     APIResponse.json({ account: account.json }).send(res);
+});
+
+SpotifyRoutes.delete("/accounts/:accountID", async (req, res) => {
+    const account = await SpotifyAccount.findOne({ uuid: assertUUID(req.params.accountID) });
+
+    if (!account) throw ErrorResponse.status(404).message("Account not found");
+
+    await account.remove();
+    await SpotifyAccount.emitUpdated();
+
+    APIResponse.json({ message: "Account deleted" }).send(res);
 });

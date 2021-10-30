@@ -1,13 +1,15 @@
 import { ErrorResponse } from "er-expresskit";
 import { log } from "../util/log";
-import { ActivityType, AnyActivity } from "./activity";
+import { ActivityType, AnyActivity } from "@spotihue/shared";
 import { HueConnectionManager } from "./hue-connection-manager";
 import { SpotifyConnectionManager } from "./spotify-connection-manager";
-import { ActivityRunner } from "./activity-runner";
+import { ActivityRunner, ActivityState } from "./activity-runner";
+import { SpotifyShuffler } from "./shuffler";
+import { EventBus } from "../stream";
+import { EffectColor } from "phea.js";
 
-export interface HuePlayerJSON {
+export interface HuePlayerJSON extends ActivityState {
     running: boolean;
-    activity: AnyActivity | null;
 }
 
 export const HuePlayer = new class HuePlayer {
@@ -15,12 +17,7 @@ export const HuePlayer = new class HuePlayer {
     
     #currentSpotifyID: string | null = null;
     #currentHueID: string | null = null;
-    #activityPlayer = new ActivityRunner(this);
-
-    constructor() {
-        process.on("SIGINT", () => this.teardown());
-        process.on("beforeExit", () => this.teardown());
-    }
+    activityPlayer = new ActivityRunner(this);
 
     get running(): boolean {
         return this.activity !== null;
@@ -67,6 +64,7 @@ export const HuePlayer = new class HuePlayer {
         if (!activity) {
             await this.teardown();
             this.#locked = false;
+            EventBus.emit("playerChanged", this.json);
 
             return;
         }
@@ -82,7 +80,11 @@ export const HuePlayer = new class HuePlayer {
         if (this.hueID !== this.#currentHueID) {
             // setup next hue
             if (this.#currentHueID) pending.push(HueConnectionManager.discardStream(this.#currentHueID));
-            if (this.hueID) pending.push(HueConnectionManager.stream(this.hueID));
+            if (this.hueID) {
+                pending.push(HueConnectionManager.stream(this.hueID).then(stream => {
+                    stream.on("frames", frames => EventBus.emit("frames", frames));
+                }));
+            }
         }
 
         this.#currentSpotifyID = this.spotifyID;
@@ -92,13 +94,27 @@ export const HuePlayer = new class HuePlayer {
 
         this.#locked = false;
 
-        this.#activityPlayer.update();
+        if (activity.type === ActivityType.spotifyShuffle) await SpotifyShuffler.playNextAnalysis(false);
+
+        this.activityPlayer.update();
+    }
+
+    changeDampenColor(color: EffectColor) {
+        if (!this.activity) return;
+
+        switch (this.activity.type) {
+            case ActivityType.spotifySync:
+            case ActivityType.spotifyShuffle:
+                this.activity.dampenColor = color;
+                this.activityPlayer.update();
+                break;
+        }
     }
 
     get json(): HuePlayerJSON {
         return {
             running: this.running,
-            activity: this.activity
+            ...this.activityPlayer.state
         }
     }
 }
